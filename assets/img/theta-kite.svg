@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320" role="img" aria-label="Kappa Alpha Theta kite">
+  <!-- Outer gold kite -->
+  <path d="M120 4
+           C128 56 170 110 232 160
+           C170 210 128 264 120 316
+           C112 264 70 210 8 160
+           C70 110 112 56 120 4 Z"
+        fill="#E4B616"/>
+  <!-- Inner black kite -->
+  <path d="M120 26
+           C128 70 164 118 216 160
+           C164 202 128 250 120 294
+           C112 250 76 202 24 160
+           C76 118 112 70 120 26 Z"
+        fill="#141414"/>
+  <!-- White chevron -->
+  <path d="M52 198 L120 116 L188 198 L164 226 L120 172 L76 226 Z"
+        fill="#FFFFFF"/>
+</svg>
