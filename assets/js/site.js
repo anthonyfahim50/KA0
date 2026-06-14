@@ -312,10 +312,10 @@ async function initLogo3D() {
   } catch {
     return; // offline / blocked — the fallback image already shows
   }
-  mounts.forEach((mount) => buildKite(THREE, mount));
+  mounts.forEach((mount) => buildLogo3D(THREE, mount));
 }
 
-function buildKite(THREE, mount) {
+function buildLogo3D(THREE, mount) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -323,6 +323,7 @@ function buildKite(THREE, mount) {
     return; // no WebGL — fallback image stays
   }
 
+  const shape = mount.dataset.shape || "kite";
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
   camera.position.z = 8;
@@ -341,56 +342,94 @@ function buildKite(THREE, mount) {
   group.add(spinner);
   scene.add(group);
 
-  // Kite silhouette (Theta's mark): wide upper shoulders, long lower point.
-  const S = 1.5;
-  const P = { topY: 1.15, sideX: 0.72, sideY: 0.42, botY: -1.35 };
-  const kite = new THREE.Shape();
-  kite.moveTo(0, P.topY * S);
-  kite.lineTo(P.sideX * S, P.sideY * S);
-  kite.lineTo(0, P.botY * S);
-  kite.lineTo(-P.sideX * S, P.sideY * S);
-  kite.closePath();
+  if (shape === "disc") {
+    // Coin: white faces with a logo composited on, colored rim. Used for the
+    // CASA badge on the Philanthropy page (mirrors the kite elsewhere).
+    const r = 2.4, depth = 0.34;
+    const faceMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.15, roughness: 0.5 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xd81e27, metalness: 0.45, roughness: 0.35 }); // CASA red
 
-  const geometry = new THREE.ExtrudeGeometry(kite, {
-    depth: 0.4, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.09, bevelSegments: 4,
-  });
-  geometry.center();
+    const img = new Image();
+    img.onload = () => {
+      const size = 1024;
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = size;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      const scale = (size * 0.74) / Math.max(img.width, img.height);
+      const w = img.width * scale, h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      faceMat.map = tex;
+      faceMat.needsUpdate = true;
+      disposables.push(tex);
+    };
+    img.src = mount.dataset.texture || "assets/img/casa-mark.jpg";
 
-  // ExtrudeGeometry UVs are shape-space coords; remap the kite art across the
-  // shape's bounding box so the emblem lands inside the silhouette.
-  const xmin = -P.sideX * S, W = 2 * P.sideX * S;
-  const ymin = P.botY * S, H = (P.topY - P.botY) * S;
+    const front = new THREE.CircleGeometry(r, 64);
+    const back = new THREE.CircleGeometry(r, 64);
+    const rim = new THREE.CylinderGeometry(r, r, depth, 64, 1, true);
+    rim.rotateX(Math.PI / 2);
+    const frontMesh = new THREE.Mesh(front, faceMat); frontMesh.position.z = depth / 2;
+    const backMesh = new THREE.Mesh(back, faceMat); backMesh.position.z = -depth / 2; backMesh.rotation.y = Math.PI;
+    const rimMesh = new THREE.Mesh(rim, rimMat);
+    spinner.add(frontMesh, backMesh, rimMesh);
+    disposables.push(front, back, rim, faceMat, rimMat);
+  } else {
+    // Kite silhouette (Theta's mark): wide upper shoulders, long lower point.
+    const S = 1.5;
+    const P = { topY: 1.15, sideX: 0.72, sideY: 0.42, botY: -1.35 };
+    const kite = new THREE.Shape();
+    kite.moveTo(0, P.topY * S);
+    kite.lineTo(P.sideX * S, P.sideY * S);
+    kite.lineTo(0, P.botY * S);
+    kite.lineTo(-P.sideX * S, P.sideY * S);
+    kite.closePath();
 
-  const faceMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.25, roughness: 0.5 });
-  const sideMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.7, roughness: 0.32 }); // gold rim
-  spinner.add(new THREE.Mesh(geometry, [faceMat, sideMat]));
-  disposables.push(geometry, faceMat, sideMat);
+    const geometry = new THREE.ExtrudeGeometry(kite, {
+      depth: 0.4, bevelEnabled: true, bevelThickness: 0.09, bevelSize: 0.09, bevelSegments: 4,
+    });
+    geometry.center();
 
-  // Kite SVG → composited onto a dark canvas (same-origin draws cleanly).
-  const img = new Image();
-  img.onload = () => {
-    const cw = 600, ch = Math.round(cw * (H / W));
-    const cv = document.createElement("canvas");
-    cv.width = cw; cv.height = ch;
-    const ctx = cv.getContext("2d");
-    ctx.fillStyle = "#161616";
-    ctx.fillRect(0, 0, cw, ch);
-    ctx.drawImage(img, 0, 0, cw, ch);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    tex.repeat.set(1 / W, 1 / H);
-    tex.offset.set(-xmin / W, -ymin / H);
-    faceMat.map = tex;
-    faceMat.needsUpdate = true;
-    disposables.push(tex);
-  };
-  img.src = mount.dataset.texture || "assets/img/theta-kite.svg";
+    // ExtrudeGeometry UVs are shape-space coords; remap the kite art across the
+    // shape's bounding box so the emblem lands inside the silhouette.
+    const xmin = -P.sideX * S, W = 2 * P.sideX * S;
+    const ymin = P.botY * S, H = (P.topY - P.botY) * S;
+
+    const faceMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.25, roughness: 0.5 });
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.7, roughness: 0.32 }); // gold rim
+    spinner.add(new THREE.Mesh(geometry, [faceMat, sideMat]));
+    disposables.push(geometry, faceMat, sideMat);
+
+    // Kite SVG → composited onto a dark canvas (same-origin draws cleanly).
+    const img = new Image();
+    img.onload = () => {
+      const cw = 600, ch = Math.round(cw * (H / W));
+      const cv = document.createElement("canvas");
+      cv.width = cw; cv.height = ch;
+      const ctx = cv.getContext("2d");
+      ctx.fillStyle = "#161616";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(img, 0, 0, cw, ch);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      tex.repeat.set(1 / W, 1 / H);
+      tex.offset.set(-xmin / W, -ymin / H);
+      faceMat.map = tex;
+      faceMat.needsUpdate = true;
+      disposables.push(tex);
+    };
+    img.src = mount.dataset.texture || "assets/img/theta-kite.svg";
+  }
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
   const key = new THREE.DirectionalLight(0xffffff, 1.7); key.position.set(4, 5, 6); scene.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, 0.85); fill.position.set(-4, 2, 5); scene.add(fill);
-  const goldRim = new THREE.DirectionalLight(0xe2c988, 1.0); goldRim.position.set(-5, -2, -4); scene.add(goldRim);
+  const rimLight = new THREE.DirectionalLight(shape === "disc" ? 0xff8a80 : 0xe2c988, 1.0); rimLight.position.set(-5, -2, -4); scene.add(rimLight);
 
   let targetTiltX = 0, targetTiltY = 0;
   const onPointer = (e) => {
@@ -466,6 +505,32 @@ function initValuesShowcase() {
 }
 
 /* --------------------------------------------------------------------------
+   11. RIVER TIMELINE (alumnae) — draw the winding river as you scroll past it.
+   The path uses pathLength="1", so dash units are normalized and the draw is
+   robust to the stretched (preserveAspectRatio="none") viewBox.
+   -------------------------------------------------------------------------- */
+function initRiverTimeline() {
+  const el = document.querySelector("[data-river]");
+  if (!el) return;
+  const current = el.querySelector(".river__current");
+  if (!current) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    current.style.strokeDashoffset = "0"; // pre-drawn, no scroll animation
+    return;
+  }
+  const update = () => {
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const denom = Math.max(1, rect.height - vh * 0.12);
+    const p = Math.min(1, Math.max(0, (vh * 0.78 - rect.top) / denom));
+    current.style.strokeDashoffset = String(1 - p);
+  };
+  update();
+  window.addEventListener("scroll", update, { passive: true });
+  window.addEventListener("resize", update, { passive: true });
+}
+
+/* --------------------------------------------------------------------------
    INIT
    -------------------------------------------------------------------------- */
 document.addEventListener("DOMContentLoaded", () => {
@@ -478,6 +543,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initForms();
   initLogo3D();
   initValuesShowcase();
+  initRiverTimeline();
 
   // Update any element tagged with the current year
   document.querySelectorAll("[data-year]").forEach((el) => (el.textContent = new Date().getFullYear()));

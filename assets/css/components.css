@@ -248,3 +248,4 @@
 .page-header .container { position: relative; z-index: 2; }
 @media (min-width: 900px) { .page-header .container { padding-right: 264px; } }
 @media (max-width: 900px) { .page-header__badge { display: none; } }
+.page-header__badge--disc { aspect-ratio: 1; } /* CASA coin is round, not kite-tall */
